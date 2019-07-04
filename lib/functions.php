@@ -51,7 +51,7 @@ if (file_exists(LIBDIR.'functions.custom.php'))
 /**
  * Loads class definition
  */
-function __autoload($className) {
+function my_autoload($className) {
 	if (file_exists(HOOKSDIR."classes/$className.php"))
 		require_once(HOOKSDIR."classes/$className.php");
 	elseif (file_exists(LIBDIR."$className.php"))
@@ -775,6 +775,8 @@ function blowfish_encrypt($data,$secret=null) {
 	return base64_encode($encrypt);
 }
 
+spl_autoload_register("my_autoload");
+
 /**
  * Decryption using blowfish algorithm
  *
@@ -1080,7 +1082,7 @@ function masort(&$data,$sortby,$rev=0) {
 
 		$code .= 'return $c;';
 
-		$CACHE[$sortby] = create_function('$a, $b',$code);
+		$CACHE[$sortby] = __create_function('$a, $b',$code);
 	}
 
 	uasort($data,$CACHE[$sortby]);
@@ -1093,6 +1095,38 @@ function isCompress() {
 	return (isset($_SESSION[APPCONFIG]) && $_SESSION[APPCONFIG]->getValue('appearance','compress')
 		&& ! ini_get('zlib.output_compression')
 		&& preg_match('/gzip/',$_SERVER['HTTP_ACCEPT_ENCODING']));
+}
+
+function __create_function($arg, $body) {
+	    static $cache = array();
+	        static $maxCacheSize = 64;
+	        static $sorter;
+
+		    if ($sorter === NULL) {
+			            $sorter = function($a, $b) {
+					                if ($a->hits == $b->hits) {
+								                return 0;
+										            }
+
+							            return ($a->hits < $b->hits) ? 1 : -1;
+							        };
+				        }
+
+		    $crc = crc32($arg . "\\x00" . $body);
+
+		    if (isset($cache[$crc])) {
+			            ++$cache[$crc][1];
+				            return $cache[$crc][0];
+				        }
+
+		        if (sizeof($cache) >= $maxCacheSize) {
+				        uasort($cache, $sorter);
+					        array_pop($cache);
+					    }
+
+		        $cache[$crc] = array($cb = eval('return 
+				function('.$arg.'){'.$body.'};'), 0);
+    return $cb;
 }
 
 /**
@@ -2127,7 +2161,7 @@ function password_types() {
  *        crypt, ext_des, md5crypt, blowfish, md5, sha, smd5, ssha, sha512, or clear.
  * @return string The hashed password.
  */
-function password_hash($password_clear,$enc_type) {
+function pla_password_hash($password_clear,$enc_type) {
 	if (DEBUG_ENABLED && (($fargs=func_get_args())||$fargs='NOARGS'))
 		debug_log('Entered (%%)',1,0,__FILE__,__LINE__,__METHOD__,$fargs);
 
@@ -2318,7 +2352,7 @@ function password_check($cryptedpassword,$plainpassword,$attribute='userpassword
 
 		# SHA crypted passwords
 		case 'sha':
-			if (strcasecmp(password_hash($plainpassword,'sha'),'{SHA}'.$cryptedpassword) == 0)
+			if (strcasecmp(pla_password_hash($plainpassword,'sha'),'{SHA}'.$cryptedpassword) == 0)
 				return true;
 			else
 				return false;
@@ -2327,7 +2361,7 @@ function password_check($cryptedpassword,$plainpassword,$attribute='userpassword
 
 		# MD5 crypted passwords
 		case 'md5':
-			if( strcasecmp(password_hash($plainpassword,'md5'),'{MD5}'.$cryptedpassword) == 0)
+			if( strcasecmp(pla_password_hash($plainpassword,'md5'),'{MD5}'.$cryptedpassword) == 0)
 				return true;
 			else
 				return false;
@@ -2565,12 +2599,12 @@ function dn_unescape($dn) {
 		$a = array();
 
 		foreach ($dn as $key => $rdn)
-			$a[$key] = preg_replace('/\\\([0-9A-Fa-f]{2})/e',"''.chr(hexdec('\\1')).''",$rdn);
+			$a[$key] = preg_replace_callback('/\\\([0-9A-Fa-f]{2})/',function(){return "''.chr(hexdec('\\1')).''";},$rdn);
 
 		return $a;
 
 	} else {
-		return preg_replace('/\\\([0-9A-Fa-f]{2})/e',"''.chr(hexdec('\\1')).''",$dn);
+		return preg_replace_callback('/\\\([0-9A-Fa-f]{2})/',function(){return "''.chr(hexdec('\\1')).''";},$dn);
 	}
 }
 
