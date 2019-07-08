@@ -916,6 +916,10 @@ class PageRender extends Visitor {
 	}
 
 	protected function getAutoPostPasswordAttribute($attribute,$i) {
+		# 20190707 for newer php installs - just post the clear pw - the ldap server will encrypt it
+		# only an issue is phpldapadmin needs to run as https internally to the ldap server
+		return;
+		
 		# If the password is already encoded, then we'll return
 		if (preg_match('/^\{.+\}.+/',$attribute->getValue($i)))
 			return;
